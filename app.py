@@ -13,7 +13,7 @@ from openai import OpenAI
 
 # 환경 변수 로딩 및 API 초기화
 load_dotenv()
-client = OpenAI(api_key=os.getenv("OPENAI_API_KEY"))
+client = OpenAI()  # api_key 인자 없이 환경변수 사용
 
 # FastAPI 앱 및 템플릿 설정
 app = FastAPI()

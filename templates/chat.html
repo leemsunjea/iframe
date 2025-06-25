@@ -1,0 +1,372 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>GPT 스트리밍 챗봇</title>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0-beta3/css/all.min.css"> <style>
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            margin: 0;
+            padding: 0;
+            background-color: #f0f2f5;
+        }
+
+        /* Chatbot Launcher Icon */
+        #chatbot-launcher {
+            position: fixed;
+            bottom: 25px;
+            right: 25px;
+            width: 60px;
+            height: 60px;
+            background-color: #007bff; /* Primary brand color */
+            color: white;
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 28px;
+            cursor: pointer;
+            box-shadow: 0 4px 10px rgba(0, 0, 0, 0.2);
+            transition: all 0.3s ease;
+            z-index: 1000; /* Ensure it's on top */
+        }
+
+        #chatbot-launcher:hover {
+            background-color: #0056b3; /* Darker on hover */
+            transform: scale(1.05);
+        }
+
+        /* Chat Window Popup */
+        #chatbot-window {
+            display: none; /* Hidden by default */
+            position: fixed;
+            bottom: 100px; /* Adjust based on launcher position */
+            right: 25px;
+            width: 380px;
+            height: 500px;
+            background-color: #fff;
+            border-radius: 12px;
+            box-shadow: 0 8px 25px rgba(0, 0, 0, 0.3);
+            overflow: hidden;
+            flex-direction: column;
+            z-index: 999;
+            animation: fadeInScale 0.3s ease-out; /* Simple animation */
+        }
+
+        @keyframes fadeInScale {
+            from { opacity: 0; transform: scale(0.95) translateY(20px); }
+            to { opacity: 1; transform: scale(1) translateY(0); }
+        }
+
+        #chatbot-header {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            background-color: #007bff; /* Header color */
+            color: white;
+            padding: 15px 20px;
+            font-size: 18px;
+            font-weight: bold;
+            border-top-left-radius: 12px;
+            border-top-right-radius: 12px;
+        }
+
+        #chatbot-header .close-btn {
+            background: none;
+            border: none;
+            color: white;
+            font-size: 24px;
+            cursor: pointer;
+            transition: transform 0.2s;
+        }
+
+        #chatbot-header .close-btn:hover {
+            transform: rotate(90deg);
+        }
+
+        #chatbox {
+            flex-grow: 1;
+            padding: 15px;
+            overflow-y: auto;
+            background-color: #f9f9f9;
+            display: flex;
+            flex-direction: column;
+            gap: 10px; /* Space between messages */
+        }
+
+        #chatbox p {
+            margin: 0;
+            padding: 10px 15px;
+            border-radius: 20px;
+            max-width: 80%;
+            word-wrap: break-word;
+            line-height: 1.5;
+        }
+
+        #chatbox p.user {
+            align-self: flex-end;
+            background-color: #e0f2f7;
+            color: #333;
+        }
+        #chatbox p.bot {
+            align-self: flex-start;
+            background-color: #e9e9eb;
+            color: #333;
+        }
+
+        #chat-input-area {
+            display: flex;
+            padding: 15px;
+            border-top: 1px solid #eee;
+            background-color: #fff;
+        }
+
+        #message {
+            flex-grow: 1;
+            padding: 12px 15px;
+            border: 1px solid #ddd;
+            border-radius: 25px;
+            font-size: 15px;
+            outline: none;
+            transition: border-color 0.2s;
+        }
+
+        #message:focus {
+            border-color: #007bff;
+        }
+
+        #send-button {
+            background-color: #007bff;
+            color: white;
+            border: none;
+            border-radius: 25px;
+            padding: 12px 20px;
+            margin-left: 10px;
+            cursor: pointer;
+            font-size: 16px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            transition: background-color 0.2s;
+        }
+
+        #send-button:hover {
+            background-color: #0056b3;
+        }
+
+        /* Responsive Adjustments */
+        @media (max-width: 768px) {
+            #chatbot-window {
+                width: 95%;
+                height: 70%; /* Adjust height for mobile */
+                bottom: 20px;
+                right: 2.5%;
+                left: 2.5%; /* Center it */
+            }
+
+            #chatbot-launcher {
+                bottom: 20px;
+                right: 20px;
+                width: 55px;
+                height: 55px;
+                font-size: 24px;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div id="chatbot-launcher" onclick="toggleChatWindow()">
+        <i class="fas fa-comment-dots"></i> </div>
+
+    <div id="chatbot-window">
+        <div id="chatbot-header">
+            <span>GPT 챗봇</span>
+            <button class="close-btn" onclick="toggleChatWindow()">&times;</button>
+        </div>
+        <div id="chatbox"></div>
+        <div id="chat-input-area">
+            <input type="text" id="message" placeholder="메시지를 입력하세요" onkeypress="handleKeyPress(event)">
+            <button id="send-button" onclick="sendMessage()">
+                <i class="fas fa-paper-plane"></i> </button>
+        </div>
+    </div>
+
+    <script>
+        const chatbox = document.getElementById('chatbox');
+        const messageInput = document.getElementById('message');
+        const chatbotWindow = document.getElementById('chatbot-window');
+        const SESSION_KEY = 'chatbot_session_id';
+        const HISTORY_KEY = 'chatbot_history';
+
+        // UUID 생성 함수
+        function generateUUID() {
+            return 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, function(c) {
+                const r = Math.random() * 16 | 0, v = c === 'x' ? r : (r & 0x3 | 0x8);
+                return v.toString(16);
+            });
+        }
+
+        // 세션 ID 가져오기 또는 생성
+        function getSessionId() {
+            let sessionId = localStorage.getItem(SESSION_KEY);
+            if (!sessionId) {
+                sessionId = generateUUID();
+                localStorage.setItem(SESSION_KEY, sessionId);
+            }
+            return sessionId;
+        }
+
+        // 대화 기록 저장 (최대 5개)
+        function saveHistory(message, isUser) {
+            let history = JSON.parse(localStorage.getItem(HISTORY_KEY) || '[]');
+            history.push({ message, isUser });
+            // Ensure we only keep the last 5 relevant messages for context
+            if (history.length > 10) { // Keep slightly more to allow for both user and bot messages
+                history = history.slice(history.length - 10);
+            }
+            localStorage.setItem(HISTORY_KEY, JSON.stringify(history));
+        }
+
+        // 대화 기록 불러오기 및 렌더링
+        function loadHistory() {
+            let history = JSON.parse(localStorage.getItem(HISTORY_KEY) || '[]');
+            chatbox.innerHTML = '';
+            history.forEach(item => {
+                const p = document.createElement('p');
+                // \n을 <br>로 변환하여 innerHTML로 출력
+                if (item.isUser) {
+                    p.innerHTML = (item.message || '').replace(/\n/g, '<br>');
+                    p.className = 'user';
+                } else {
+                    p.innerHTML = (item.message || '').replace(/\n/g, '<br>');
+                    p.className = 'bot';
+                }
+                chatbox.appendChild(p);
+            });
+            chatbox.scrollTop = chatbox.scrollHeight;
+        }
+
+        // 최근 5개 대화 기록 불러오기 (for server)
+        function getHistoryForServer() {
+            let history = JSON.parse(localStorage.getItem(HISTORY_KEY) || '[]');
+            // Filter to ensure only the last 5 actual conversational turns are sent
+            let conversationTurns = [];
+            for (let i = history.length - 1; i >= 0 && conversationTurns.length < 5; i--) {
+                conversationTurns.unshift(history[i]); // Add to the beginning to maintain order
+            }
+            return conversationTurns.map(item => ({
+                role: item.isUser ? 'user' : 'assistant',
+                content: item.message.replace(/<br>/g, '\n') // Replace <br> with newline for server
+            }));
+        }
+
+        // Toggle chat window visibility
+        function toggleChatWindow() {
+            if (chatbotWindow.style.display === 'flex') {
+                chatbotWindow.style.display = 'none';
+            } else {
+                chatbotWindow.style.display = 'flex';
+                loadHistory(); // Load history when opening
+            }
+        }
+
+        // Handle Enter key press
+        function handleKeyPress(event) {
+            if (event.key === 'Enter') {
+                sendMessage();
+            }
+        }
+
+        function sendMessage() {
+            let message = messageInput.value.trim();
+            if (message === '') return;
+            // <br>을 \n으로 변환해서 저장
+            const messageForSave = message.replace(/<br\s*\/?>/gi, '\n');
+            // Display user message
+            const userP = document.createElement('p');
+            userP.innerHTML = message.replace(/\n/g, '<br>');
+            userP.className = 'user';
+            chatbox.appendChild(userP);
+            saveHistory(messageForSave, true);
+
+            messageInput.value = '';
+            chatbox.scrollTop = chatbox.scrollHeight;
+
+            // Add a temporary "typing..." indicator
+            const typingIndicator = document.createElement('p');
+            typingIndicator.id = 'typing-indicator';
+            typingIndicator.textContent = '봇이 응답 중...';
+            typingIndicator.className = 'bot';
+            typingIndicator.style.fontStyle = 'italic';
+            typingIndicator.style.color = '#777';
+            typingIndicator.style.backgroundColor = '#f0f0f0';
+            chatbox.appendChild(typingIndicator);
+            chatbox.scrollTop = chatbox.scrollHeight;
+
+            // SSE to get streaming response
+            const sessionId = getSessionId();
+            const historyForServer = getHistoryForServer();
+            const url = `/chat?message=${encodeURIComponent(messageForSave)}&session_id=${sessionId}&history=${encodeURIComponent(JSON.stringify(historyForServer))}`;
+            const eventSource = new EventSource(url);
+
+            let botResponse = '';
+
+            eventSource.onmessage = function(event) {
+                const existingTypingIndicator = document.getElementById('typing-indicator');
+                if (existingTypingIndicator) {
+                    existingTypingIndicator.remove();
+                }
+                botResponse += event.data;
+                let lastBotMessage = chatbox.lastElementChild;
+                if (lastBotMessage && lastBotMessage.classList.contains('bot')) {
+                    lastBotMessage.innerHTML = botResponse.replace(/\n/g, '<br>');
+                } else {
+                    const botP = document.createElement('p');
+                    botP.innerHTML = botResponse.replace(/\n/g, '<br>');
+                    botP.className = 'bot';
+                    chatbox.appendChild(botP);
+                }
+                chatbox.scrollTop = chatbox.scrollHeight;
+            };
+
+            eventSource.onerror = function() {
+                eventSource.close();
+                const existingTypingIndicator = document.getElementById('typing-indicator');
+                if (existingTypingIndicator) {
+                    existingTypingIndicator.remove();
+                }
+                if (!botResponse) {
+                    const errorP = document.createElement('p');
+                    errorP.textContent = "죄송합니다, 응답을 가져오는 데 문제가 발생했습니다.";
+                    errorP.style.color = 'red';
+                    errorP.className = 'bot';
+                    chatbox.appendChild(errorP);
+                    chatbox.scrollTop = chatbox.scrollHeight;
+                }
+                if (botResponse) {
+                    saveHistory(botResponse, false);
+                }
+            };
+
+            eventSource.onopen = function() {};
+            eventSource.onclose = function() {
+                if (botResponse) {
+                    let lastBotMessage = chatbox.lastElementChild;
+                    if (lastBotMessage && lastBotMessage.innerHTML === botResponse.replace(/\n/g, '<br>')) {
+                        saveHistory(botResponse, false);
+                    }
+                }
+            };
+        }
+
+        // On page load, remove history (as per your original code) and load history
+        window.addEventListener('load', function() {
+            localStorage.removeItem(HISTORY_KEY); // Clear history on full page reload
+            loadHistory(); // This will clear the chatbox and re-render an empty state if history is cleared
+        });
+
+        // Initialize display to ensure window is hidden on load if not manually opened
+        chatbotWindow.style.display = 'none';
+
+    </script>
+</body>
+</html>

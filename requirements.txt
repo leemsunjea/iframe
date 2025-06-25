@@ -1,5 +1,5 @@
 fastapi
 uvicorn
 sse-starlette
-openai==1.6.1
+openai>=1.7.0
 python-dotenv

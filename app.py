@@ -78,7 +78,7 @@ PROMPT = """
 # 루트 페이지 (챗봇 UI 페이지)
 @app.get("/", response_class=HTMLResponse)
 async def index(request: Request):
-    return templates.TemplateResponse("index.html", {"request": request})
+    return templates.TemplateResponse("chat.html", {"request": request})
 
 # 스트리밍 응답 생성 함수
 async def stream_chat_response(user_input: str, history: list, session_id: Optional[str] = None):

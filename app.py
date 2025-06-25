@@ -1,34 +1,25 @@
-from flask import Flask, render_template
-
-app = Flask(__name__, template_folder='templates')
-
-@app.route('/')
-def home():
-    return render_template('chat.html')
-
-
 import os
+import json
+import typing
+import asyncio
+from typing import Optional
+
+from dotenv import load_dotenv
 from fastapi import FastAPI, Request, Query
 from fastapi.responses import HTMLResponse
 from fastapi.templating import Jinja2Templates
 from sse_starlette.sse import EventSourceResponse
 from openai import OpenAI
-import asyncio
-from dotenv import load_dotenv
-import json
-from typing import Any, Optional
-import uuid
-import typing
-from openai.types.chat import ChatCompletionSystemMessageParam, ChatCompletionUserMessageParam, ChatCompletionAssistantMessageParam
 
+# 환경 변수 로딩 및 API 초기화
 load_dotenv()
+client = OpenAI(api_key=os.getenv("OPENAI_API_KEY"))
 
+# FastAPI 앱 및 템플릿 설정
 app = FastAPI()
 templates = Jinja2Templates(directory="templates")
 
-# OpenAI API 키 설정 (환경 변수에서 가져오기)
-client = OpenAI(api_key=os.getenv("OPENAI_API_KEY"))
-
+# 프롬프트
 PROMPT = """
 당신은 친절한 AI 챗봇입니다. 사용자의 질문에 성실하게 답변하세요. 응답은 항상 마크다운 형식으로 작성하세요.
 
@@ -84,12 +75,13 @@ PROMPT = """
 불확실하거나 정보가 부족할 경우, "현재 제공된 정보로는 정확한 답변이 어렵습니다. 자세한 내용은 www.gorilla51.com을 참고하세요."라고 안내하세요.
 """
 
+# 루트 페이지 (챗봇 UI 페이지)
 @app.get("/", response_class=HTMLResponse)
 async def index(request: Request):
     return templates.TemplateResponse("index.html", {"request": request})
 
+# 스트리밍 응답 생성 함수
 async def stream_chat_response(user_input: str, history: list, session_id: Optional[str] = None):
-    """OpenAI API로 직접 프롬프트와 히스토리를 전달하여 답변을 스트리밍하는 함수"""
     try:
         messages = [{"role": "system", "content": PROMPT}]
         for h in history:
@@ -98,22 +90,28 @@ async def stream_chat_response(user_input: str, history: list, session_id: Optio
             else:
                 messages.append({"role": "user", "content": str(h)})
         messages.append({"role": "user", "content": user_input})
+
         response_stream = client.chat.completions.create(
             model="gpt-3.5-turbo",
             messages=typing.cast(list, messages),
             stream=True
         )
+
         for chunk in response_stream:
-            if chunk.choices[0].delta.content is not None:
+            if chunk.choices[0].delta.content:
                 content = chunk.choices[0].delta.content.replace("\n", "<br>")
                 yield content
             await asyncio.sleep(0)
     except Exception as e:
         yield f"<span style='color:red;'>에러 발생: {str(e)}</span>"
 
+# SSE 기반 채팅 API
 @app.get("/chat")
-async def chat(message: str, session_id: str = Query(None), history: str = Query(None)):
-    # 클라이언트에서 history를 JSON 문자열로 전달받음
+async def chat(
+    message: str,
+    session_id: Optional[str] = Query(None),
+    history: Optional[str] = Query(None)
+):
     try:
         history_list = json.loads(history) if history else []
     except Exception:

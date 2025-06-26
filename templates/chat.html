@@ -389,12 +389,18 @@
         }
         tabBot.addEventListener('click', () => {
             activateTab('bot');
-            clearInterval(window.agentPoller);
-            window.agentPoller = null;
+            if (window.agentMsgPoller) {
+                clearInterval(window.agentMsgPoller);
+                window.agentMsgPoller = null;
+            }
         });
+        // 상담원 탭 진입 시 메시지 polling 시작
         tabAgent.addEventListener('click', () => {
             activateTab('agent');
             loadAllMessages();
+            if (!window.agentMsgPoller) {
+                window.agentMsgPoller = setInterval(loadAllMessages, 1000);
+            }
         });
 
         // 상담원 메시지 escape 함수

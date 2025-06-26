@@ -395,12 +395,13 @@
                 p.className = 'agent';
                 agentbox.appendChild(p);
                 agentbox.scrollTop = agentbox.scrollHeight;
+                console.log('[상담원] 입력 메시지:', message);
 
                 // 쿠키에서 session_id도 body에 추가
                 const sessionIdFromCookie = getSessionIdFromCookie();
                 const sessionId = getSessionId();
-                // 메시지 전송 후 바로 폴링하여 최신 메시지 반영
-                await fetch('/send', {
+                // 메시지 전송만 하고, pollAgentMessages()로 즉시 갱신하지 않음
+                const res = await fetch('/send', {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify({
@@ -409,8 +410,17 @@
                         message
                     })
                 });
-                // 전송 후 바로 메시지 목록 갱신
-                await pollAgentMessages();
+                const result = await res.json();
+                console.log('[상담원] /send 응답:', result);
+                // 에러 발생 시 사용자에게 바로 표시
+                if (result.status === 'error') {
+                    const errorP = document.createElement('p');
+                    errorP.textContent = '[상담원] 전송 에러: ' + (result.detail || '알 수 없는 오류');
+                    errorP.style.color = 'red';
+                    errorP.className = 'bot';
+                    agentbox.appendChild(errorP);
+                    agentbox.scrollTop = agentbox.scrollHeight;
+                }
             } else {
                 // GPT 챗봇
                 const pUser = document.createElement('p');

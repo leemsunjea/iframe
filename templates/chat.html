@@ -187,6 +187,9 @@
             height: 100%;
             overflow-y: auto;
             border: none;
+            display: flex;
+            flex-direction: column;
+            gap: 0;
         }
         .msg {
             margin-bottom: 1.2em;
@@ -388,26 +391,20 @@
         });
         tabAgent.addEventListener('click', () => {
             activateTab('agent');
-            pollAgentMessages();
-            if (!window.agentPoller) {
-                window.agentPoller = setInterval(pollAgentMessages, 3000);
-            }
+            // 기존 메시지 초기화 코드 제거
+            // localAgentMessages = [];
+            // agentbox.innerHTML = '';
         });
 
-        // 상담원 메시지 폴링
-        async function pollAgentMessages() {
-            const sid = getSessionId();
-            const res = await fetch(`/messages?session_id=${sid}`);
-            const data = await res.json();
-            agentbox.innerHTML = '';
-            data.forEach(m => {
-                const p = document.createElement('p');
-                p.innerHTML = m.message.replace(/\n/g, '<br>');
-                p.className = m.from === 'agent' ? 'agent' : 'bot';
-                agentbox.appendChild(p);
-            });
-            agentbox.scrollTop = agentbox.scrollHeight;
+        // 상담원 메시지 escape 함수
+        function escapeHtml(text) {
+          return text.replace(/[&<>"']/g, function(m) {
+            return ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;','\'':'&#39;'})[m];
+          });
         }
+
+        // 상담원 메시지 상태
+        let localAgentMessages = [];
 
         // 상담원 메시지 렌더링 함수 (n8n 스타일)
         function renderAgentMessagesN8N() {
@@ -421,33 +418,6 @@
             agentbox.appendChild(div);
           });
           agentbox.scrollTop = agentbox.scrollHeight;
-        }
-
-        // 상담원 메시지 escape 함수
-        function escapeHtml(text) {
-          return text.replace(/[&<>"']/g, function(m) {
-            return ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;','\'':'&#39;'})[m];
-          });
-        }
-
-        // 상담원 메시지 상태
-        let localAgentMessages = [];
-        let lastAgentMessageTs = null;
-
-        // 상담원 메시지 전체 불러오기 및 중복 없이 추가
-        async function loadAllAgentMessages() {
-          const sid = getSessionId();
-          try {
-            const res = await fetch(`/messages?session_id=${encodeURIComponent(sid)}`);
-            const msgs = await res.json();
-            const existKey = new Set(localAgentMessages.map(m => (m.ts||'') + m.message));
-            msgs.forEach(m => {
-              if (!existKey.has((m.ts||'') + m.message)) localAgentMessages.push({ ...m, from: m.from || 'agent' });
-            });
-            localAgentMessages.sort((a, b) => (a.ts || '').localeCompare(b.ts || ''));
-            renderAgentMessagesN8N();
-            if (msgs.length > 0) lastAgentMessageTs = msgs[msgs.length - 1].ts;
-          } catch (e) {}
         }
 
         // 상담원 메시지 전송

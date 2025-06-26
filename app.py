@@ -110,6 +110,7 @@ async def incoming_message(data: dict = Body(...)):
         logger.warning("[/incoming-message] session_id is missing")
         return JSONResponse({"status": "error", "detail": "session_id is required"}, status_code=400)
     data["ts"] = datetime.utcnow().isoformat()
+    data["from"] = "agent"  # 반드시 추가!
     agent_messages.append(data)
     logger.info(f"[/incoming-message] Message stored in memory: {data}")
     return {"status": "stored"}

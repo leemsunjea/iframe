@@ -391,9 +391,7 @@
         });
         tabAgent.addEventListener('click', () => {
             activateTab('agent');
-            // 기존 메시지 초기화 코드 제거
-            // localAgentMessages = [];
-            // agentbox.innerHTML = '';
+            loadAllMessages();
         });
 
         // 상담원 메시지 escape 함수
@@ -403,21 +401,42 @@
           });
         }
 
-        // 상담원 메시지 상태
-        let localAgentMessages = [];
+        // 상담원 채팅 메시지 상태
+        let localMessages = [];
+        let lastMessageTs = null;
+        const messagesDiv = document.getElementById('agentbox');
 
-        // 상담원 메시지 렌더링 함수 (n8n 스타일)
-        function renderAgentMessagesN8N() {
-          agentbox.innerHTML = '';
-          localAgentMessages.forEach(m => {
+        // 상담원 채팅 메시지 렌더링 함수 (n8n 스타일)
+        function renderMessages() {
+          messagesDiv.innerHTML = '';
+          localMessages.forEach(m => {
             // from이 'user'면 agent, 아니면 user로 처리 (위치 반전)
             const who = m.from === 'user' ? 'agent' : 'user';
             const div = document.createElement('div');
             div.className = 'msg ' + who;
             div.innerHTML = `<span class="bubble">${escapeHtml(m.message)}</span><div class="meta">${m.ts ? m.ts.replace('T',' ').slice(0,19) : ''}</div>`;
-            agentbox.appendChild(div);
+            messagesDiv.appendChild(div);
           });
-          agentbox.scrollTop = agentbox.scrollHeight;
+          messagesDiv.scrollTop = messagesDiv.scrollHeight;
+        }
+
+        // 서버에서 메시지 전체를 받아오고, 중복 없이 추가
+        async function loadAllMessages() {
+          try {
+            const sid = getSessionId();
+            const res = await fetch(`/messages?session_id=${encodeURIComponent(sid)}`);
+            const msgs = await res.json();
+            // 중복 방지: ts+message 기준으로 필터
+            const existKey = new Set(localMessages.map(m => (m.ts||'') + m.message));
+            msgs.forEach(m => {
+              // from이 없으면 agent로 간주
+              if (!existKey.has((m.ts||'') + m.message)) localMessages.push({ ...m, from: m.from || 'agent' });
+            });
+            // ts 기준 정렬
+            localMessages.sort((a, b) => (a.ts || '').localeCompare(b.ts || ''));
+            renderMessages();
+            if (msgs.length > 0) lastMessageTs = msgs[msgs.length - 1].ts;
+          } catch (e) {}
         }
 
         // 상담원 메시지 전송
@@ -428,8 +447,8 @@
           // 1. 입력창 먼저 비우기
           messageInput.value = '';
           // 2. 바로 채팅창에 추가 (from: user)
-          localAgentMessages.push({ message, ts, from: 'user' });
-          renderAgentMessagesN8N();
+          localMessages.push({ message, ts, from: 'user' });
+          renderMessages();
           try {
             await fetch('/send', {
               method: 'POST',
@@ -511,6 +530,7 @@
             localStorage.removeItem(HISTORY_KEY);
             loadHistory();
             activateTab('bot');
+            loadAllMessages();
         });
     </script>
 </body>

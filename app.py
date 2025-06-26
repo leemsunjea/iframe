@@ -11,6 +11,7 @@ import requests
 import logging
 from datetime import datetime
 from openai import OpenAI
+from sse_starlette.sse import EventSourceResponse
 
 # 환경 변수 로딩 및 API 초기화
 from dotenv import load_dotenv

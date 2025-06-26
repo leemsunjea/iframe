@@ -450,9 +450,6 @@
           } catch (e) {}
         }
 
-        // 1초마다 상담원 메시지 polling
-        setInterval(loadAllAgentMessages, 1000);
-
         // 상담원 메시지 전송
         async function sendAgentMessageN8N(message) {
           const sid = getSessionId();

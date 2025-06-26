@@ -108,36 +108,71 @@
             flex-grow: 1;
             padding: 15px;
             overflow-y: auto;
-            background-color: #f9f9f9;
+            background-color: #f7fafd;
             display: none;
             flex-direction: column;
-            gap: 10px;
+            gap: 12px;
         }
         .chat-area.active {
             display: flex;
         }
         .chat-area p {
             margin: 0;
-            padding: 10px 15px;
-            border-radius: 20px;
-            max-width: 80%;
+            padding: 12px 18px;
+            border-radius: 18px;
+            max-width: 75%;
             word-wrap: break-word;
-            line-height: 1.5;
+            line-height: 1.6;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.06);
+            position: relative;
+            font-size: 15px;
         }
         .chat-area p.user {
             align-self: flex-end;
-            background-color: #e0f2f7;
-            color: #333;
+            background-color: #d0eaff;
+            color: #222;
+            text-align: right;
+            border-bottom-right-radius: 6px;
+        }
+        .chat-area p.user::after {
+            content: '';
+            position: absolute;
+            right: -10px;
+            bottom: 8px;
+            border-width: 8px 0 8px 10px;
+            border-style: solid;
+            border-color: transparent transparent transparent #d0eaff;
         }
         .chat-area p.bot {
             align-self: flex-start;
-            background-color: #e9e9eb;
+            background-color: #f0f0f0;
             color: #333;
+            border-bottom-left-radius: 6px;
+        }
+        .chat-area p.bot::after {
+            content: '';
+            position: absolute;
+            left: -10px;
+            bottom: 8px;
+            border-width: 8px 10px 8px 0;
+            border-style: solid;
+            border-color: transparent #f0f0f0 transparent transparent;
         }
         .chat-area p.agent {
             align-self: flex-end;
-            background-color: #d1f7c4;
-            color: #333;
+            background-color: #c6f5d7;
+            color: #222;
+            text-align: right;
+            border-bottom-right-radius: 6px;
+        }
+        .chat-area p.agent::after {
+            content: '';
+            position: absolute;
+            right: -10px;
+            bottom: 8px;
+            border-width: 8px 0 8px 10px;
+            border-style: solid;
+            border-color: transparent transparent transparent #c6f5d7;
         }
 
         /* Input Area */
@@ -363,15 +398,19 @@
 
                 // 쿠키에서 session_id도 body에 추가
                 const sessionIdFromCookie = getSessionIdFromCookie();
+                const sessionId = getSessionId();
+                // 메시지 전송 후 바로 폴링하여 최신 메시지 반영
                 await fetch('/send', {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify({
-                        session_id: getSessionId(),
+                        session_id: sessionId,
                         session_id_cookie: sessionIdFromCookie,
                         message
                     })
                 });
+                // 전송 후 바로 메시지 목록 갱신
+                await pollAgentMessages();
             } else {
                 // GPT 챗봇
                 const pUser = document.createElement('p');
@@ -411,14 +450,18 @@
                 };
                 es.onerror = () => {
                     es.close();
+                    // typing-indicator가 남아있으면 제거만 하고 에러 메시지는 추가하지 않음
                     const prev = document.getElementById('typing-indicator');
                     if (prev) prev.remove();
-                    const errorP = document.createElement('p');
-                    errorP.textContent = '죄송합니다, 응답을 가져오는 데 문제가 발생했습니다.';
-                    errorP.style.color = 'red';
-                    errorP.className = 'bot';
-                    chatbox.appendChild(errorP);
-                    chatbox.scrollTop = chatbox.scrollHeight;
+                    // botResponse가 이미 있으면(응답이 일부라도 왔으면) 에러 메시지 추가하지 않음
+                    if (!botResponse) {
+                        const errorP = document.createElement('p');
+                        errorP.textContent = '죄송합니다, 응답을 가져오는 데 문제가 발생했습니다.';
+                        errorP.style.color = 'red';
+                        errorP.className = 'bot';
+                        chatbox.appendChild(errorP);
+                        chatbox.scrollTop = chatbox.scrollHeight;
+                    }
                 };
                 es.onclose = () => {
                     saveHistory(botResponse, false);

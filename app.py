@@ -10,6 +10,7 @@ from typing import Optional
 import requests
 import logging
 from datetime import datetime
+from openai import OpenAI
 
 # 환경 변수 로딩 및 API 초기화
 from dotenv import load_dotenv

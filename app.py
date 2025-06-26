@@ -3,13 +3,13 @@ import json
 import typing
 import asyncio
 from typing import Optional
-
-from dotenv import load_dotenv
-from fastapi import FastAPI, Request, Query
-from fastapi.responses import HTMLResponse
+from fastapi import FastAPI, Request, Query, Body
+from fastapi.responses import HTMLResponse, JSONResponse
 from fastapi.templating import Jinja2Templates
 from sse_starlette.sse import EventSourceResponse
 from openai import OpenAI
+import requests
+from datetime import datetime
 
 # 환경 변수 로딩 및 API 초기화
 load_dotenv()
@@ -117,3 +117,30 @@ async def chat(
     except Exception:
         history_list = []
     return EventSourceResponse(stream_chat_response(message, history_list, session_id))
+
+# 상담원 메시지 저장 (메모리)
+agent_messages: list[dict] = []
+N8N_WEBHOOK: str = os.getenv("N8N_WEBHOOK", "https://sunjea1149.app.n8n.cloud/webhook/chat-relay")
+
+# ---------- 상담원: 프런트에서 메시지 보냄 → n8n Webhook 호출 ----------
+@app.post("/send")
+async def send_agent_message(data: dict = Body(...)):
+    try:
+        response = requests.post(N8N_WEBHOOK, json=data, timeout=5)
+        response.raise_for_status()
+    except Exception as e:
+        return JSONResponse({"status": "error", "detail": str(e)}, status_code=502)
+    return {"status": "sent"}
+
+# ---------- 상담원: n8n에서 메시지 받음 → 프런트로 보여주기 위해 저장 ----------
+@app.post("/incoming-message")
+async def incoming_message(data: dict = Body(...)):
+    data["ts"] = datetime.utcnow().isoformat()
+    agent_messages.append(data)
+    return {"status": "stored"}
+
+# ---------- 상담원: 프런트가 메시지 조회 ----------
+@app.get("/messages")
+async def get_agent_messages(session_id: Optional[str] = Query(None)):
+    filtered = [m for m in agent_messages if m.get("session_id") == session_id] if session_id else agent_messages
+    return filtered[-50:]

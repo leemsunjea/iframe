@@ -4,3 +4,4 @@ sse-starlette
 openai>=1.7.0
 python-dotenv
 jinja2
+requests

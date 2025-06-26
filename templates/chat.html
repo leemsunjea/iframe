@@ -262,6 +262,7 @@
     </style>
 </head>
 <body>
+    <div style="text-align:center;margin:8px 0 0 0;font-size:13px;color:#888;">세션ID: <span id="session-id-label"></span></div>
     <div id="chatbot-launcher" onclick="toggleChatWindow()">
         <i class="fas fa-comment-dots"></i>
     </div>
@@ -312,7 +313,7 @@
                 return v.toString(16);
             });
         }
-        // 세션 ID 얻기
+        // 세션 ID 얻기 및 화면에 표시
         function getSessionId() {
             let sessionId = localStorage.getItem(SESSION_KEY);
             if (!sessionId) {
@@ -320,11 +321,13 @@
                 localStorage.setItem(SESSION_KEY, sessionId);
                 document.cookie = `${SESSION_KEY}=${sessionId}; path=/;`;
             } else {
-                // localStorage에만 있고 쿠키에 없으면 쿠키에도 저장
                 if (!document.cookie.split('; ').find(row => row.startsWith(SESSION_KEY + '='))) {
                     document.cookie = `${SESSION_KEY}=${sessionId}; path=/;`;
                 }
             }
+            // 화면에 세션ID 표시
+            const sessionIdLabel = document.getElementById('session-id-label');
+            if (sessionIdLabel) sessionIdLabel.textContent = sessionId;
             return sessionId;
         }
         // 쿠키에서 세션 ID 얻기

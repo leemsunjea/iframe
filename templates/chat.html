@@ -175,6 +175,33 @@
             border-color: transparent transparent transparent #c6f5d7;
         }
 
+        /* 상담원 채팅 n8n 스타일 */
+        #agentbox {
+            background: none;
+            border-radius: 0;
+            box-shadow: none;
+            max-width: 100%;
+            margin: 0;
+            padding: 0;
+            min-height: 0;
+            height: 100%;
+            overflow-y: auto;
+            border: none;
+        }
+        .msg {
+            margin-bottom: 1.2em;
+        }
+        .msg.agent { text-align: right; }
+        .msg .bubble {
+            display: inline-block;
+            padding: 0.6em 1em;
+            border-radius: 1.2em;
+            max-width: 80%;
+        }
+        .msg.agent .bubble { background: #d1eaff; color: #222; }
+        .msg.user .bubble { background: #eee; color: #333; }
+        .meta { font-size: 0.8em; color: #888; margin-top: 0.2em; }
+
         /* Input Area */
         #chat-input-area {
             display: flex;
@@ -382,6 +409,69 @@
             agentbox.scrollTop = agentbox.scrollHeight;
         }
 
+        // 상담원 메시지 렌더링 함수 (n8n 스타일)
+        function renderAgentMessagesN8N() {
+          agentbox.innerHTML = '';
+          localAgentMessages.forEach(m => {
+            // from이 'user'면 agent, 아니면 user로 처리 (위치 반전)
+            const who = m.from === 'user' ? 'agent' : 'user';
+            const div = document.createElement('div');
+            div.className = 'msg ' + who;
+            div.innerHTML = `<span class="bubble">${escapeHtml(m.message)}</span><div class="meta">${m.ts ? m.ts.replace('T',' ').slice(0,19) : ''}</div>`;
+            agentbox.appendChild(div);
+          });
+          agentbox.scrollTop = agentbox.scrollHeight;
+        }
+
+        // 상담원 메시지 escape 함수
+        function escapeHtml(text) {
+          return text.replace(/[&<>"']/g, function(m) {
+            return ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;','\'':'&#39;'})[m];
+          });
+        }
+
+        // 상담원 메시지 상태
+        let localAgentMessages = [];
+        let lastAgentMessageTs = null;
+
+        // 상담원 메시지 전체 불러오기 및 중복 없이 추가
+        async function loadAllAgentMessages() {
+          const sid = getSessionId();
+          try {
+            const res = await fetch(`/messages?session_id=${encodeURIComponent(sid)}`);
+            const msgs = await res.json();
+            const existKey = new Set(localAgentMessages.map(m => (m.ts||'') + m.message));
+            msgs.forEach(m => {
+              if (!existKey.has((m.ts||'') + m.message)) localAgentMessages.push({ ...m, from: m.from || 'agent' });
+            });
+            localAgentMessages.sort((a, b) => (a.ts || '').localeCompare(b.ts || ''));
+            renderAgentMessagesN8N();
+            if (msgs.length > 0) lastAgentMessageTs = msgs[msgs.length - 1].ts;
+          } catch (e) {}
+        }
+
+        // 1초마다 상담원 메시지 polling
+        setInterval(loadAllAgentMessages, 1000);
+
+        // 상담원 메시지 전송
+        async function sendAgentMessageN8N(message) {
+          const sid = getSessionId();
+          const now = new Date();
+          const ts = now.toISOString();
+          // 1. 입력창 먼저 비우기
+          messageInput.value = '';
+          // 2. 바로 채팅창에 추가 (from: user)
+          localAgentMessages.push({ message, ts, from: 'user' });
+          renderAgentMessagesN8N();
+          try {
+            await fetch('/send', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({ session_id: sid, message })
+            });
+          } catch (e) {}
+        }
+
         // 메시지 전송 (챗봇 vs 상담원 분기)
         async function sendMessage() {
             const message = messageInput.value.trim();
@@ -390,37 +480,7 @@
 
             if (tabAgent.classList.contains('active')) {
                 // 상담원 메시지
-                const p = document.createElement('p');
-                p.innerHTML = message.replace(/\n/g, '<br>');
-                p.className = 'agent';
-                agentbox.appendChild(p);
-                agentbox.scrollTop = agentbox.scrollHeight;
-                console.log('[상담원] 입력 메시지:', message);
-
-                // 쿠키에서 session_id도 body에 추가
-                const sessionIdFromCookie = getSessionIdFromCookie();
-                const sessionId = getSessionId();
-                // 메시지 전송만 하고, pollAgentMessages()로 즉시 갱신하지 않음
-                const res = await fetch('/send', {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({
-                        session_id: sessionId,
-                        session_id_cookie: sessionIdFromCookie,
-                        message
-                    })
-                });
-                const result = await res.json();
-                console.log('[상담원] /send 응답:', result);
-                // 에러 발생 시 사용자에게 바로 표시
-                if (result.status === 'error') {
-                    const errorP = document.createElement('p');
-                    errorP.textContent = '[상담원] 전송 에러: ' + (result.detail || '알 수 없는 오류');
-                    errorP.style.color = 'red';
-                    errorP.className = 'bot';
-                    agentbox.appendChild(errorP);
-                    agentbox.scrollTop = agentbox.scrollHeight;
-                }
+                await sendAgentMessageN8N(message);
             } else {
                 // GPT 챗봇
                 const pUser = document.createElement('p');

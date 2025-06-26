@@ -6,14 +6,13 @@ from typing import Optional
 from fastapi import FastAPI, Request, Query, Body
 from fastapi.responses import HTMLResponse, JSONResponse
 from fastapi.templating import Jinja2Templates
-from sse_starlette.sse import EventSourceResponse
-from openai import OpenAI
+from typing import Optional
 import requests
-from datetime import datetime
-from dotenv import load_dotenv
 import logging
+from datetime import datetime
 
 # 환경 변수 로딩 및 API 초기화
+from dotenv import load_dotenv
 load_dotenv()
 
 # 로깅 설정
@@ -110,7 +109,7 @@ async def incoming_message(data: dict = Body(...)):
         return JSONResponse({"status": "error", "detail": "session_id is required"}, status_code=400)
     data["ts"] = datetime.utcnow().isoformat()
     agent_messages.append(data)
-    logger.info(f"[/incoming-message] Message stored. Total messages: {len(agent_messages)}")
+    logger.info(f"[/incoming-message] Message stored in memory: {data}")
     return {"status": "stored"}
 
 # ---------- 상담원: 프런트가 메시지 조회 ----------
@@ -120,6 +119,6 @@ async def get_agent_messages(session_id: Optional[str] = Query(None)):
     if not session_id:
         logger.warning("[/messages] session_id is missing, returning empty list")
         return []
-    filtered = [m for m in agent_messages if m.get("session_id") == session_id]
-    logger.info(f"[/messages] Returning {len(filtered[-50:])} messages")
-    return filtered[-50:]
+    messages = [m for m in agent_messages if m.get("session_id") == session_id]
+    logger.info(f"[/messages] Returning {len(messages[-50:])} messages from memory")
+    return messages[-50:]
